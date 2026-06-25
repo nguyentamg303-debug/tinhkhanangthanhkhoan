@@ -1,43 +1,78 @@
 import streamlit as st
-# 1. Nhập dữ liệu đầu vào (Đã sửa lại đơn vị hiển thị phù hợp)
-STV = float(input("Nhập số tiền muốn vay (Triệu đồng): "))
-TGV = float(input("Nhập thời gian vay (Năm): "))
-LSV = float(input("Nhập lãi suất vay hàng năm (%/năm): "))
-TN = float(input("Nhập thu nhập hàng tháng (Triệu đồng): "))
-SNTGD = float(input("Nhập số người trong gia đình (Người): "))
 
-CPSH_dinh_muc = 5.0  # Chi phí sinh hoạt định mức/người (Triệu đồng)
-PTMC = float(input("Nhập số tiền phải trả cho khoản vay cũ (Triệu đồng): "))
+# Cấu hình giao diện ứng dụng
+st.set_page_config(page_title="App Đánh Giá Chỉ Số DTI & Cấp Tín Dụng", page_icon="🏦", layout="centered")
 
-# 2. Tính toán các thông số tài chính theo chuẩn ngân hàng
-tong_so_thang = TGV * 12
-lai_suat_thang = (LSV / 100) / 12
+# --- THÔNG TIN TIÊU ĐỀ ---
+st.title("🏦 Ứng Dụng Thẩm Định Tín Dụng & Tính Chỉ Số DTI")
+st.write("Hỗ trợ tính toán tỷ lệ nợ trên thu nhập và đưa ra quyết định cho vay tự động.")
+st.markdown("---")
 
-# Tính số tiền trả định kỳ hàng tháng (Phương pháp định kỳ bằng nhau - Annuity)
-if lai_suat_thang > 0:
-    PTMM = STV * (lai_suat_thang * (1 + lai_suat_thang)**tong_so_thang) / ((1 + lai_suat_thang)**tong_so_thang - 1)
-else:
-    PTMM = STV / tong_so_thang  # Trường hợp hy hữu: Lãi suất 0%
+# --- PHẦN NHẬP DỮ LIỆU ĐẦU VÀO ---
+st.subheader("📋 Nhập thông tin tài chính người vay")
 
-# Chi phí sinh hoạt gia đình
-tong_chi_phi_sh = SNTGD * CPSH_dinh_muc
+# Sử dụng st.columns để phân chia giao diện cho gọn gàng
+col1, col2 = st.columns(2)
 
-# 3. Tính toán chỉ số đánh giá (DTI chuẩn và DTI hiệu chỉnh theo chi phí)
-# DTI chuẩn = Tổng nợ / Tổng thu nhập
-DTI_chuan = (PTMC + PTMM) / TN 
+with col1:
+    stv = st.number_input("1. Số tiền muốn vay (Triệu đồng):", min_value=0.0, value=100.0, step=10.0)
+    tgv = st.number_input("2. Thời gian vay (Năm):", min_value=0.5, value=2.0, step=0.5)
+    lsv = st.number_input("3. Lãi suất vay (%/năm):", min_value=0.0, value=10.5, step=0.5)
 
-# 4. Biện luận điều kiện cấp tín dụng
-print("\n" + "="*30)
-print(f"SỐ TIỀN PHẢI TRẢ CHO KHOẢN VAY MỚI: {PTMM:.2f} Triệu đồng/tháng")
-print(f"CHỈ SỐ DTI CHUẨN: {DTI_chuan * 100:.2f}%")
-print("="*30)
+with col2:
+    tn = st.number_input("4. Thu nhập hàng tháng (Triệu đồng):", min_value=1.0, value=30.0, step=1.0)
+    sntgd = st.number_input("5. Số người trong gia đình (Người):", min_value=1.0, value=3.0, step=1.0)
+    ptmc = st.number_input("6. Số tiền phải trả cho khoản vay cũ (Triệu đồng/tháng):", min_value=0.0, value=0.0, step=0.5)
 
-# Ngưỡng phê duyệt: DTI không quá 70% VÀ Thu nhập phải lớn hơn tổng nợ + chi phí sinh hoạt
-if DTI_chuan <= 0.7 and TN > (PTMC + PTMM + tong_chi_phi_sh):
-    print("KẾT LUẬN: ĐƯỢC CHO VAY")
-else:
-    print("KẾT LUẬN: KHÔNG ĐƯỢC CHO VAY")
-    if DTI_chuan > 0.7:
-        print("-> Lý do: Chỉ số DTI vượt ngưỡng an toàn (70%).")
-    if TN <= (PTMC + PTMM + tong_chi_phi_sh):
-        print("-> Lý do: Thu nhập không đủ bù đắp chi phí sinh hoạt tối thiểu và nghĩa vụ nợ.")
+# Chi phí sinh hoạt mặc định (theo code gốc của bạn)
+CPSH = 5.0
+
+st.markdown("---")
+
+# --- HÀM LOGIC TÍNH TOÁN THEO CÔNG THỨC GỐC ---
+def tinh_toan_dti(STV, TGV, LSV, TN, SNTGD, PTMC):
+    # Công thức gốc của bạn để tính số tiền phải trả khoản vay mới hàng tháng
+    # (LSV chia cho 100 để đổi từ % sang hệ số phân số)
+    PTMM = (STV / (TGV * 12)) + (STV * (LSV / 100) / 12)
+    
+    # Mẫu số: Thu nhập trừ chi phí sinh hoạt gia đình
+    mau_so = TN - (SNTGD * CPSH)
+    
+    # Tránh lỗi chia cho 0 hoặc mẫu số bị âm
+    if mau_so <= 0:
+        return PTMM, float('inf'), mau_so
+        
+    # Công thức tính DTI gốc của bạn
+    DTI = (PTMC + PTMM) / mau_so
+    return PTMM, DTI, mau_so
+
+# --- PHẦN NÚT BẤM KÍCH HOẠT VÀ HIỂN THỊ KẾT QUẢ ---
+if st.button("🧮 Thẩm Định Khoản Vay", type="primary"):
+    ptmm, dti, dong_tien_con_lai = tinh_toan_dti(stv, tgv, lsv, tn, sntgd, ptmc)
+    
+    st.subheader("🎯 Kết Quả Phân Tích")
+    
+    # Hiển thị các chỉ số cốt lõi dưới dạng thẻ Metric
+    c1, c2 = st.columns(2)
+    with c1:
+        st.metric(label="Số tiền trả khoản vay mới (Tháng đầu)", value=f"{ptmm:.2f} Triệu")
+        st.metric(label="Dòng tiền còn lại sau sinh hoạt phí", value=f"{dong_tien_con_lai:.2f} Triệu")
+    with c2:
+        if dti == float('inf'):
+            st.metric(label="Chỉ số DTI của bạn", value="Vô cực (Thu nhập < Chi phí)")
+        else:
+            st.metric(label="Chỉ số DTI của bạn", value=f"{dti * 100:.2f}%")
+
+    st.markdown("---")
+    
+    # --- BIỆN LUẬN ĐIỀU KIỆN ĐƯỢC CHO VAY ---
+    if dti <= 0.7:
+        st.success("🎉 KẾT LUẬN: ĐƯỢC CHO VAY")
+        st.write("Khách hàng thỏa mãn điều kiện chỉ số DTI nằm trong ngưỡng an toàn (≤ 70%).")
+    else:
+        st.error("❌ KẾT LUẬN: KHÔNG ĐƯỢC CHO VAY")
+        st.write("### [Lý do từ chối]:")
+        if dti == float('inf') or dong_tien_con_lai <= 0:
+            st.write("- Thu nhập hàng tháng không đủ chi trả cho chi phí sinh hoạt định mức của gia đình.")
+        else:
+            st.write(f"- Chỉ số DTI hiện tại ({dti * 100:.2f}%) đã vượt quá ngưỡng rủi ro cho phép (70%).")
